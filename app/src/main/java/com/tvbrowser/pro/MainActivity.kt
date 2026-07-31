@@ -183,16 +183,17 @@ class MainActivity : AppCompatActivity(), BrowserView.Listener, RemoteController
     override fun onPrimaryVideoReady(tab: BrowserView, videoUrl: String) {
         if (tab.tabId != tabManager.activeTabId) return
         Log.d(TAG, "Primary video candidate ready: $videoUrl")
-        launchFullscreenPlayer(videoUrl)
+        startPlaybackWindowed(videoUrl)
     }
 
     override fun onDirectStreamRequested(tab: BrowserView, videoUrl: String) {
         if (tab.tabId != tabManager.activeTabId) return
         // This request has already passed the ad-domain filter in shouldInterceptRequest,
         // so a direct .mp4/.m3u8/.mpd hit here is very likely genuine content rather than
-        // an ad segment. Hand it straight to ExoPlayer per the base architecture requirement.
+        // an ad segment. Start it in ExoPlayer, but windowed rather than fullscreen —
+        // the person decides for themselves when (and whether) to go fullscreen.
         Log.d(TAG, "Direct stream requested: $videoUrl")
-        launchFullscreenPlayer(videoUrl)
+        startPlaybackWindowed(videoUrl)
     }
 
     override fun onReceivedError(tab: BrowserView, description: String?) {
@@ -206,6 +207,17 @@ class MainActivity : AppCompatActivity(), BrowserView.Listener, RemoteController
     // ---------------------------------------------------------------------
     // Fullscreen / windowed (mini) player handoff
     // ---------------------------------------------------------------------
+
+    /**
+     * Starts (or resumes) playback of [url] in the small windowed mini-player only.
+     * Fullscreen is never entered automatically — the person taps/selects the
+     * mini player themselves (see [expandMiniPlayer]) whenever they want it big.
+     */
+    private fun startPlaybackWindowed(url: String) {
+        PlayerHolder.playUrl(this, url)
+        PlayerHolder.isMinimized = true
+        refreshMiniPlayerVisibility()
+    }
 
     private fun launchFullscreenPlayer(url: String) {
         hideMiniPlayer(release = false)
