@@ -8,9 +8,11 @@ import android.view.KeyEvent
 import android.view.LayoutInflater
 import android.view.View
 import android.view.inputmethod.EditorInfo
+import android.webkit.WebView
 import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.ImageButton
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.TextView
@@ -28,7 +30,9 @@ class MainActivity : AppCompatActivity(), BrowserView.Listener, RemoteController
     private lateinit var newTabButton: ImageButton
     private lateinit var settingsButton: ImageButton
     private lateinit var addressBar: EditText
+    private lateinit var webviewStack: FrameLayout
     private lateinit var webviewContainer: FrameLayout
+    private lateinit var tvCursor: ImageView
     private lateinit var loadingProgress: ProgressBar
     private lateinit var miniPlayerContainer: FrameLayout
     private lateinit var miniPlayerView: PlayerView
@@ -37,6 +41,7 @@ class MainActivity : AppCompatActivity(), BrowserView.Listener, RemoteController
     private lateinit var browserPrefs: android.content.SharedPreferences
     private lateinit var tabManager: TabManager
     private lateinit var remoteController: RemoteController
+    private lateinit var cursorController: CursorController
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -46,7 +51,9 @@ class MainActivity : AppCompatActivity(), BrowserView.Listener, RemoteController
         newTabButton = findViewById(R.id.newTabButton)
         settingsButton = findViewById(R.id.settingsButton)
         addressBar = findViewById(R.id.addressBar)
+        webviewStack = findViewById(R.id.webviewStack)
         webviewContainer = findViewById(R.id.webviewContainer)
+        tvCursor = findViewById(R.id.tvCursor)
         loadingProgress = findViewById(R.id.loadingProgress)
         miniPlayerContainer = findViewById(R.id.miniPlayerContainer)
         miniPlayerView = findViewById(R.id.miniPlayerView)
@@ -58,6 +65,19 @@ class MainActivity : AppCompatActivity(), BrowserView.Listener, RemoteController
         )
 
         remoteController = RemoteController(this)
+        cursorController = CursorController(webviewStack, tvCursor)
+
+        // Show the cursor whenever a WebView holds Android focus, hide it everywhere
+        // else (tab bar, address bar, settings, mini player) so it never overlaps
+        // controls it isn't relevant to.
+        window.decorView.viewTreeObserver.addOnGlobalFocusChangeListener { _, newFocus ->
+            if (newFocus is WebView) {
+                cursorController.show()
+            } else {
+                cursorController.hide()
+            }
+        }
+
         tabManager = TabManager(this, webviewContainer, browserPrefs, this)
         tabManager.restoreOrCreateInitialTabs()
         renderTabBar()
@@ -282,16 +302,28 @@ class MainActivity : AppCompatActivity(), BrowserView.Listener, RemoteController
     override fun onRemoteSelectPressed(focusedView: View?): Boolean {
         val activeBrowser = tabManager.activeTab()?.browserView
         if (activeBrowser != null && focusedView === activeBrowser.webView) {
-            // Hint the heuristic that the user deliberately interacted with the page;
-            // still let the key event propagate to the WebView itself for normal clicks.
+            // Hint the primary-video heuristic that the user deliberately interacted
+            // with the page, then dispatch a real synthetic tap at the cursor's
+            // position — this is what lets any element (link, button, custom video
+            // player control) be clicked exactly as with a mouse/finger, not just
+            // elements that happen to support HTML keyboard focus.
             activeBrowser.notifyUserTappedVideoArea()
+            cursorController.dispatchTap(activeBrowser.webView)
+            return true
         }
         return false
     }
 
-    override fun onRemoteDirectionPressed(keyCode: Int, focusedView: View?): Boolean {
-        // Defer to normal Android focus-navigation between tab bar / address bar /
-        // webview / mini player.
+    override fun onRemoteDirectionPressed(keyCode: Int, repeatCount: Int, focusedView: View?): Boolean {
+        if (focusedView is WebView) {
+            // A quick press moves the cursor; holding the direction scrolls the page
+            // via a synthetic swipe. If the cursor is already pinned at an edge on a
+            // quick press, this returns false so normal Android focus-navigation can
+            // take over (e.g. moving up out of the page to the address bar/tab bar).
+            return cursorController.handleDirectionKey(keyCode, repeatCount, focusedView)
+        }
+        // Outside the WebView, defer to normal Android focus-navigation between
+        // tab bar / address bar / webview / mini player.
         return false
     }
 

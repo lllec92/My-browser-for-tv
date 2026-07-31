@@ -91,7 +91,7 @@ class VideoPlayerActivity : AppCompatActivity(), RemoteController.Callback, Play
         return false
     }
 
-    override fun onRemoteDirectionPressed(keyCode: Int, focusedView: View?): Boolean {
+    override fun onRemoteDirectionPressed(keyCode: Int, repeatCount: Int, focusedView: View?): Boolean {
         // Let the default PlayerView controller handle seeking/scrubbing.
         return false
     }

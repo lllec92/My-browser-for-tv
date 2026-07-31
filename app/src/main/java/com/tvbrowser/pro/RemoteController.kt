@@ -22,8 +22,11 @@ class RemoteController(private val callback: Callback) {
         /** D-pad center / OK / Enter was pressed. Return true if consumed. */
         fun onRemoteSelectPressed(focusedView: View?): Boolean
 
-        /** D-pad directional press (UP/DOWN/LEFT/RIGHT). Return true if consumed. */
-        fun onRemoteDirectionPressed(keyCode: Int, focusedView: View?): Boolean
+        /** D-pad directional press (UP/DOWN/LEFT/RIGHT). [repeatCount] is 0 for the
+         *  initial press and increases while the key is held down (auto-repeat) —
+         *  callers use this to move a cursor on a quick tap but scroll continuously
+         *  while the direction is held. Return true if consumed. */
+        fun onRemoteDirectionPressed(keyCode: Int, repeatCount: Int, focusedView: View?): Boolean
 
         /** Media play/pause remote button. Return true if consumed. */
         fun onRemotePlayPausePressed(): Boolean
@@ -46,7 +49,7 @@ class RemoteController(private val callback: Callback) {
             KeyEvent.KEYCODE_DPAD_UP,
             KeyEvent.KEYCODE_DPAD_DOWN,
             KeyEvent.KEYCODE_DPAD_LEFT,
-            KeyEvent.KEYCODE_DPAD_RIGHT -> callback.onRemoteDirectionPressed(event.keyCode, focusedView)
+            KeyEvent.KEYCODE_DPAD_RIGHT -> callback.onRemoteDirectionPressed(event.keyCode, event.repeatCount, focusedView)
 
             KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE,
             KeyEvent.KEYCODE_MEDIA_PLAY,

@@ -12,4 +12,5 @@
     <dimen name="text_size_medium">16sp</dimen>
     <dimen name="text_size_small">13sp</dimen>
     <dimen name="focus_scale_elevation">4dp</dimen>
+    <dimen name="cursor_size">30dp</dimen>
 </resources>

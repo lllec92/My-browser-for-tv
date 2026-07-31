@@ -28,7 +28,7 @@ class TabManager(
     companion object {
         private const val PREFS_NAME = "tv_browser_tabs"
         private const val KEY_TAB_URLS = "tab_urls"
-        private const val DEFAULT_HOME_URL = "https://www.google.com"
+        private const val DEFAULT_HOME_URL = "https://www.kinokong.day"
     }
 
     private val tabsPrefs: SharedPreferences =

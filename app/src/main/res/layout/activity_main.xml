@@ -90,13 +90,29 @@
 
         </LinearLayout>
 
-        <!-- WebView tab contents -->
+        <!-- WebView tab contents + remote-controlled cursor overlay -->
         <FrameLayout
-            android:id="@+id/webviewContainer"
+            android:id="@+id/webviewStack"
             android:layout_width="match_parent"
             android:layout_height="0dp"
-            android:layout_weight="1"
-            android:background="@color/bg_surface" />
+            android:layout_weight="1">
+
+            <FrameLayout
+                android:id="@+id/webviewContainer"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:background="@color/bg_surface" />
+
+            <ImageView
+                android:id="@+id/tvCursor"
+                android:layout_width="@dimen/cursor_size"
+                android:layout_height="@dimen/cursor_size"
+                android:src="@drawable/ic_cursor"
+                android:elevation="20dp"
+                android:visibility="gone"
+                android:contentDescription="@null" />
+
+        </FrameLayout>
 
     </LinearLayout>
 
