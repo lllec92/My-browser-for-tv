@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">TV Browser Pro</string>
+
+    <string name="new_tab">Новая вкладка</string>
+    <string name="close_tab">Закрыть вкладку</string>
+    <string name="settings">Настройки</string>
+    <string name="address_bar_hint">Введите адрес сайта…</string>
+    <string name="go">Перейти</string>
+    <string name="loading">Загрузка…</string>
+
+    <string name="mini_player_expand">Развернуть плеер</string>
+    <string name="mini_player_close">Закрыть видео</string>
+    <string name="player_minimized_hint">Видео свёрнуто в окно. Нажмите OK на окне, чтобы развернуть.</string>
+
+    <string name="settings_title">Настройки</string>
+    <string name="settings_adblock_title">Блокировка рекламных доменов</string>
+    <string name="settings_adblock_summary">Блокирует известные рекламные и трекинговые домены при загрузке страниц</string>
+    <string name="settings_heuristic_title">Определять основное видео автоматически</string>
+    <string name="settings_heuristic_summary">Открывать в плеере только главный видеопоток страницы, игнорируя preroll-рекламу</string>
+    <string name="settings_clear_tabs_title">Очистить сохранённые вкладки</string>
+    <string name="settings_clear_tabs_summary">Удалить список открытых вкладок, сохранённый между запусками</string>
+    <string name="settings_back">Назад</string>
+
+    <string name="player_error_generic">Ошибка воспроизведения видео</string>
+    <string name="player_error_decoder">Не удалось использовать аппаратный декодер, включён программный режим</string>
+    <string name="webview_error_generic">Не удалось загрузить страницу</string>
+
+    <string name="tv_banner_desc">TV Browser Pro</string>
+</resources>

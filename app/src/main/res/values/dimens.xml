@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <dimen name="tv_overscan_margin">32dp</dimen>
+    <dimen name="tab_bar_height">64dp</dimen>
+    <dimen name="tab_card_width">220dp</dimen>
+    <dimen name="tab_card_height">48dp</dimen>
+    <dimen name="tab_card_radius">10dp</dimen>
+    <dimen name="mini_player_width">360dp</dimen>
+    <dimen name="mini_player_height">203dp</dimen>
+    <dimen name="mini_player_margin">24dp</dimen>
+    <dimen name="text_size_large">22sp</dimen>
+    <dimen name="text_size_medium">16sp</dimen>
+    <dimen name="text_size_small">13sp</dimen>
+    <dimen name="focus_scale_elevation">4dp</dimen>
+</resources>

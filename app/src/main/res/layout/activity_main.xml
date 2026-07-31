@@ -1,0 +1,148 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/bg_root">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical">
+
+        <!-- Tab bar -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="@dimen/tab_bar_height"
+            android:background="@color/bg_tabbar"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingStart="@dimen/tv_overscan_margin"
+            android:paddingEnd="16dp">
+
+            <HorizontalScrollView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:scrollbars="none">
+
+                <LinearLayout
+                    android:id="@+id/tabBarContainer"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal" />
+
+            </HorizontalScrollView>
+
+            <ImageButton
+                android:id="@+id/newTabButton"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:layout_marginStart="8dp"
+                android:background="@drawable/icon_button_bg"
+                android:contentDescription="@string/new_tab"
+                android:focusable="true"
+                android:padding="8dp"
+                android:src="@android:drawable/ic_input_add" />
+
+            <ImageButton
+                android:id="@+id/settingsButton"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:layout_marginStart="8dp"
+                android:background="@drawable/icon_button_bg"
+                android:contentDescription="@string/settings"
+                android:focusable="true"
+                android:padding="8dp"
+                android:src="@android:drawable/ic_menu_preferences" />
+
+        </LinearLayout>
+
+        <!-- Address bar -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="@color/bg_surface"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingStart="@dimen/tv_overscan_margin"
+            android:paddingEnd="16dp"
+            android:paddingTop="8dp"
+            android:paddingBottom="8dp">
+
+            <EditText
+                android:id="@+id/addressBar"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:background="@drawable/focus_highlight"
+                android:hint="@string/address_bar_hint"
+                android:imeOptions="actionGo"
+                android:inputType="textUri"
+                android:maxLines="1"
+                android:paddingStart="12dp"
+                android:paddingEnd="12dp"
+                android:paddingTop="8dp"
+                android:paddingBottom="8dp"
+                android:textColor="@color/text_primary"
+                android:textColorHint="@color/text_disabled"
+                android:textSize="@dimen/text_size_medium" />
+
+        </LinearLayout>
+
+        <!-- WebView tab contents -->
+        <FrameLayout
+            android:id="@+id/webviewContainer"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:background="@color/bg_surface" />
+
+    </LinearLayout>
+
+    <ProgressBar
+        android:id="@+id/loadingProgress"
+        style="?android:attr/progressBarStyleHorizontal"
+        android:layout_width="match_parent"
+        android:layout_height="3dp"
+        android:layout_gravity="top"
+        android:layout_marginTop="@dimen/tab_bar_height"
+        android:indeterminate="true"
+        android:max="100"
+        android:progressTint="@color/accent_primary"
+        android:visibility="gone" />
+
+    <!-- Mini (windowed) player overlay -->
+    <FrameLayout
+        android:id="@+id/miniPlayerContainer"
+        android:layout_width="@dimen/mini_player_width"
+        android:layout_height="@dimen/mini_player_height"
+        android:layout_gravity="bottom|end"
+        android:layout_margin="@dimen/mini_player_margin"
+        android:background="@drawable/mini_player_bg"
+        android:focusable="true"
+        android:visibility="gone"
+        android:elevation="12dp">
+
+        <androidx.media3.ui.PlayerView
+            android:id="@+id/miniPlayerView"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            app:use_controller="false"
+            app:resize_mode="fit" />
+
+        <TextView
+            android:id="@+id/miniPlayerHint"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_gravity="bottom"
+            android:background="@color/overlay_scrim"
+            android:padding="6dp"
+            android:text="@string/mini_player_expand"
+            android:textColor="@color/text_primary"
+            android:textSize="@dimen/text_size_small"
+            android:gravity="center" />
+
+    </FrameLayout>
+
+</FrameLayout>

@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Base dark TV palette -->
+    <color name="bg_root">#0E1116</color>
+    <color name="bg_surface">#171B22</color>
+    <color name="bg_surface_elevated">#1F2530</color>
+    <color name="bg_tabbar">#12151B</color>
+
+    <color name="accent_primary">#4FC3F7</color>
+    <color name="accent_primary_dim">#2E7997</color>
+    <color name="accent_focus">#FFFFFF</color>
+    <color name="accent_danger">#EF5350</color>
+    <color name="accent_success">#66BB6A</color>
+
+    <color name="text_primary">#F5F7FA</color>
+    <color name="text_secondary">#9AA4B2</color>
+    <color name="text_disabled">#5A6472</color>
+
+    <color name="divider">#2A303B</color>
+    <color name="overlay_scrim">#B3000000</color>
+
+    <color name="tab_card_default">#1B202A</color>
+    <color name="tab_card_focused">#2C4A5E</color>
+    <color name="tab_card_active">#233240</color>
+
+    <color name="white">#FFFFFF</color>
+    <color name="black">#000000</color>
+    <color name="transparent">#00000000</color>
+</resources>

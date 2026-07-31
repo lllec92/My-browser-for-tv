@@ -1,0 +1,59 @@
+package com.tvbrowser.pro
+
+import android.view.KeyEvent
+import android.view.View
+
+/**
+ * Centralises remote-control (D-pad) key handling so Activities can delegate
+ * dispatchKeyEvent/onKeyDown to a single place.
+ *
+ * IMPORTANT: none of the callback methods below are named the same as any
+ * Activity/Fragment/View lifecycle or callback method (onBackPressed,
+ * onKeyDown, onResume, etc). This avoids a Kotlin override/return-type clash
+ * when an Activity implements this interface directly, which was the root
+ * cause of a build failure in the previous version of this app.
+ */
+class RemoteController(private val callback: Callback) {
+
+    interface Callback {
+        /** D-pad BACK was pressed. Return true if it was consumed. */
+        fun onRemoteBackPressed(): Boolean
+
+        /** D-pad center / OK / Enter was pressed. Return true if consumed. */
+        fun onRemoteSelectPressed(focusedView: View?): Boolean
+
+        /** D-pad directional press (UP/DOWN/LEFT/RIGHT). Return true if consumed. */
+        fun onRemoteDirectionPressed(keyCode: Int, focusedView: View?): Boolean
+
+        /** Media play/pause remote button. Return true if consumed. */
+        fun onRemotePlayPausePressed(): Boolean
+    }
+
+    /**
+     * Call this from Activity.dispatchKeyEvent or onKeyDown.
+     * Returns true if the event was handled and should not propagate further.
+     */
+    fun handleKeyEvent(event: KeyEvent, focusedView: View?): Boolean {
+        if (event.action != KeyEvent.ACTION_DOWN) return false
+
+        return when (event.keyCode) {
+            KeyEvent.KEYCODE_BACK -> callback.onRemoteBackPressed()
+
+            KeyEvent.KEYCODE_DPAD_CENTER,
+            KeyEvent.KEYCODE_ENTER,
+            KeyEvent.KEYCODE_NUMPAD_ENTER -> callback.onRemoteSelectPressed(focusedView)
+
+            KeyEvent.KEYCODE_DPAD_UP,
+            KeyEvent.KEYCODE_DPAD_DOWN,
+            KeyEvent.KEYCODE_DPAD_LEFT,
+            KeyEvent.KEYCODE_DPAD_RIGHT -> callback.onRemoteDirectionPressed(event.keyCode, focusedView)
+
+            KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE,
+            KeyEvent.KEYCODE_MEDIA_PLAY,
+            KeyEvent.KEYCODE_MEDIA_PAUSE,
+            KeyEvent.KEYCODE_SPACE -> callback.onRemotePlayPausePressed()
+
+            else -> false
+        }
+    }
+}
