@@ -269,7 +269,7 @@ class MainActivity : AppCompatActivity(), BrowserView.Listener, RemoteController
 
     override fun onRemoteSelectPressed(focusedView: View?): Boolean {
         val activeBrowser = tabManager.activeTab()?.browserView
-        if (focusedView === activeBrowser?.webView) {
+        if (activeBrowser != null && focusedView === activeBrowser.webView) {
             // Hint the heuristic that the user deliberately interacted with the page;
             // still let the key event propagate to the WebView itself for normal clicks.
             activeBrowser.notifyUserTappedVideoArea()
