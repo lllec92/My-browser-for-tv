@@ -38,6 +38,7 @@ class CursorController(
         private const val SWIPE_STEP_DELAY_MS = 12L
         private const val SWIPE_THROTTLE_MS = 220L
         private const val TAP_UP_DELAY_MS = 60L
+        private const val LONG_PRESS_CHECK_DELAY_MS = 90L
     }
 
     private val density = container.resources.displayMetrics.density
@@ -153,6 +154,37 @@ class CursorController(
             webView.dispatchTouchEvent(up)
             up.recycle()
         }, TAP_UP_DELAY_MS)
+    }
+
+    /**
+     * Long-press support: touches down at the cursor's position so the WebView updates
+     * its internal hit-test state for that point, reads back what's under the cursor a
+     * moment later, then cancels the gesture (ACTION_CANCEL rather than ACTION_UP) so it
+     * doesn't also trigger a normal click/navigation. [onResult] receives the link URL
+     * if the cursor was over a link/image-link, or null otherwise.
+     */
+    fun checkLinkUnderCursor(webView: WebView, onResult: (String?) -> Unit) {
+        val x = hotspotX()
+        val y = hotspotY()
+        val downTime = SystemClock.uptimeMillis()
+
+        val down = MotionEvent.obtain(downTime, downTime, MotionEvent.ACTION_DOWN, x, y, 0)
+        webView.dispatchTouchEvent(down)
+        down.recycle()
+
+        handler.postDelayed({
+            val result = webView.hitTestResult
+            val link = when (result.type) {
+                WebView.HitTestResult.SRC_ANCHOR_TYPE,
+                WebView.HitTestResult.SRC_IMAGE_ANCHOR_TYPE -> result.extra
+                else -> null
+            }
+            val cancelTime = SystemClock.uptimeMillis()
+            val cancel = MotionEvent.obtain(downTime, cancelTime, MotionEvent.ACTION_CANCEL, x, y, 0)
+            webView.dispatchTouchEvent(cancel)
+            cancel.recycle()
+            onResult(link)
+        }, LONG_PRESS_CHECK_DELAY_MS)
     }
 
     /**

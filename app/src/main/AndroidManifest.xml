@@ -4,6 +4,20 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- Only needed on API <=28: from API 29+ the system Download Manager can write
+         to the public Downloads directory without this permission (scoped storage). -->
+    <uses-permission
+        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="28" />
+
+    <!-- Android 11+ package-visibility: lets us check that a speech-recognition
+         activity exists before launching the voice-search intent. -->
+    <queries>
+        <intent>
+            <action android:name="android.speech.action.RECOGNIZE_SPEECH" />
+        </intent>
+    </queries>
 
     <!-- Android TV declarations -->
     <uses-feature
@@ -11,6 +25,9 @@
         android:required="true" />
     <uses-feature
         android:name="android.hardware.touchscreen"
+        android:required="false" />
+    <uses-feature
+        android:name="android.hardware.microphone"
         android:required="false" />
 
     <application
@@ -48,6 +65,18 @@
 
         <activity
             android:name=".SettingsActivity"
+            android:exported="false"
+            android:screenOrientation="landscape"
+            android:parentActivityName=".MainActivity" />
+
+        <activity
+            android:name=".BookmarksActivity"
+            android:exported="false"
+            android:screenOrientation="landscape"
+            android:parentActivityName=".MainActivity" />
+
+        <activity
+            android:name=".HistoryActivity"
             android:exported="false"
             android:screenOrientation="landscape"
             android:parentActivityName=".MainActivity" />

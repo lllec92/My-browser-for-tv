@@ -1,13 +1,17 @@
 package com.tvbrowser.pro
 
 import android.annotation.SuppressLint
+import android.app.DownloadManager
 import android.content.Context
 import android.content.SharedPreferences
 import android.graphics.Bitmap
+import android.net.Uri
+import android.os.Environment
 import android.util.AttributeSet
 import android.util.Log
 import android.view.View
 import android.webkit.JavascriptInterface
+import android.webkit.URLUtil
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
@@ -42,6 +46,7 @@ class BrowserView(
         fun onPrimaryVideoReady(tab: BrowserView, videoUrl: String)
         fun onDirectStreamRequested(tab: BrowserView, videoUrl: String)
         fun onReceivedError(tab: BrowserView, description: String?)
+        fun onDownloadStarted(tab: BrowserView, fileName: String)
     }
 
     var listener: Listener? = null
@@ -55,6 +60,11 @@ class BrowserView(
     private var userTappedVideoArea = false
 
     val webView: WebView = WebView(context)
+
+    /** The WebView's own default User-Agent, captured before any override, so we can
+     *  restore it exactly when "Desktop mode" is turned off. Must be read before
+     *  setupWebView() (called from init{} below) applies any override. */
+    private val defaultUserAgent: String = webView.settings.userAgentString
 
     init {
         setupWebView()
@@ -74,12 +84,23 @@ class BrowserView(
             cacheMode = android.webkit.WebSettings.LOAD_DEFAULT
             javaScriptCanOpenWindowsAutomatically = true
             setSupportMultipleWindows(false)
+            // Page zoom, driven by our own zoom in/out buttons rather than the
+            // built-in on-screen +/- widget (which needs touch to use).
+            setSupportZoom(true)
+            builtInZoomControls = true
+            displayZoomControls = false
         }
+
+        applyUserAgentSetting()
 
         webView.isFocusable = true
         webView.isFocusableInTouchMode = true
 
         webView.addJavascriptInterface(VideoDetectorBridge(), "AndroidVideoDetector")
+
+        webView.setDownloadListener { url, userAgent, contentDisposition, mimeType, contentLength ->
+            startDownload(url, userAgent, contentDisposition, mimeType, contentLength)
+        }
 
         webView.webViewClient = object : WebViewClient() {
             override fun shouldInterceptRequest(
@@ -103,6 +124,7 @@ class BrowserView(
 
             override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) {
                 super.onPageStarted(view, url, favicon)
+                applyUserAgentSetting()
                 currentUrl = url
                 bestCandidateUrl = null
                 bestCandidateScore = -1.0
@@ -178,6 +200,54 @@ class BrowserView(
         bestCandidateUrl?.let { url ->
             listener?.onPrimaryVideoReady(this@BrowserView, url)
         }
+    }
+
+    /** Applies the Desktop/Mobile User-Agent based on the current setting. Safe to call
+     *  repeatedly (e.g. on every page load) so a setting change takes effect on the very
+     *  next navigation without needing to recreate the tab. */
+    fun applyUserAgentSetting() {
+        webView.settings.userAgentString = if (VideoInterceptor.isDesktopModeEnabled(prefs)) {
+            VideoInterceptor.DESKTOP_USER_AGENT
+        } else {
+            defaultUserAgent
+        }
+    }
+
+    private fun startDownload(
+        url: String,
+        userAgent: String,
+        contentDisposition: String,
+        mimeType: String?,
+        contentLength: Long
+    ) {
+        try {
+            val fileName = URLUtil.guessFileName(url, contentDisposition, mimeType)
+            val request = DownloadManager.Request(Uri.parse(url)).apply {
+                setMimeType(mimeType)
+                addRequestHeader("User-Agent", userAgent)
+                setTitle(fileName)
+                setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+                setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, fileName)
+                setAllowedOverRoaming(true)
+            }
+            val downloadManager = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+            downloadManager.enqueue(request)
+            Log.d(TAG, "Download started: $fileName ($url)")
+            listener?.onDownloadStarted(this@BrowserView, fileName)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to start download for $url", e)
+        }
+    }
+
+    /** Zooms the page in/out. Backed by the WebView's built-in zoom engine (enabled via
+     *  setSupportZoom/builtInZoomControls above), just triggered by our own buttons
+     *  instead of the touch-only on-screen zoom widget. */
+    fun zoomIn() {
+        webView.zoomIn()
+    }
+
+    fun zoomOut() {
+        webView.zoomOut()
     }
 
     fun loadUrl(url: String) {

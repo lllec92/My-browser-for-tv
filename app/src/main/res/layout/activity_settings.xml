@@ -103,6 +103,48 @@
 
         </LinearLayout>
 
+        <!-- Desktop mode switch row -->
+        <LinearLayout
+            android:id="@+id/rowDesktopMode"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="@drawable/focus_highlight"
+            android:focusable="true"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:padding="16dp"
+            android:layout_marginBottom="12dp">
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/settings_desktop_mode_title"
+                    android:textColor="@color/text_primary"
+                    android:textSize="@dimen/text_size_medium" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/settings_desktop_mode_summary"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="@dimen/text_size_small" />
+            </LinearLayout>
+
+            <Switch
+                android:id="@+id/switchDesktopMode"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:focusable="false"
+                android:clickable="false" />
+
+        </LinearLayout>
+
         <!-- Clear tabs -->
         <LinearLayout
             android:id="@+id/rowClearTabs"
@@ -126,6 +168,60 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="@string/settings_clear_tabs_summary"
+                android:textColor="@color/text_secondary"
+                android:textSize="@dimen/text_size_small" />
+        </LinearLayout>
+
+        <!-- Clear history -->
+        <LinearLayout
+            android:id="@+id/rowClearHistory"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="@drawable/focus_highlight"
+            android:focusable="true"
+            android:gravity="center_vertical"
+            android:orientation="vertical"
+            android:padding="16dp"
+            android:layout_marginBottom="12dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/settings_clear_history_title"
+                android:textColor="@color/text_primary"
+                android:textSize="@dimen/text_size_medium" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/settings_clear_history_summary"
+                android:textColor="@color/text_secondary"
+                android:textSize="@dimen/text_size_small" />
+        </LinearLayout>
+
+        <!-- Clear bookmarks -->
+        <LinearLayout
+            android:id="@+id/rowClearBookmarks"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="@drawable/focus_highlight"
+            android:focusable="true"
+            android:gravity="center_vertical"
+            android:orientation="vertical"
+            android:padding="16dp"
+            android:layout_marginBottom="12dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/settings_clear_bookmarks_title"
+                android:textColor="@color/text_primary"
+                android:textSize="@dimen/text_size_medium" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/settings_clear_bookmarks_summary"
                 android:textColor="@color/text_secondary"
                 android:textSize="@dimen/text_size_small" />
         </LinearLayout>

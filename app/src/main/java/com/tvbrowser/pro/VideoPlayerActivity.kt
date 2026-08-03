@@ -86,7 +86,7 @@ class VideoPlayerActivity : AppCompatActivity(), RemoteController.Callback, Play
         return true
     }
 
-    override fun onRemoteSelectPressed(focusedView: View?): Boolean {
+    override fun onRemoteSelectPressed(focusedView: View?, repeatCount: Int): Boolean {
         // Let the default PlayerView controller handle OK/select for play-pause/seek.
         return false
     }

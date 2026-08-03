@@ -46,6 +46,28 @@
                 android:src="@android:drawable/ic_input_add" />
 
             <ImageButton
+                android:id="@+id/bookmarksButton"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:layout_marginStart="8dp"
+                android:background="@drawable/icon_button_bg"
+                android:contentDescription="@string/open_bookmarks"
+                android:focusable="true"
+                android:padding="9dp"
+                android:src="@android:drawable/ic_menu_agenda" />
+
+            <ImageButton
+                android:id="@+id/historyButton"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:layout_marginStart="8dp"
+                android:background="@drawable/icon_button_bg"
+                android:contentDescription="@string/open_history"
+                android:focusable="true"
+                android:padding="9dp"
+                android:src="@drawable/ic_history" />
+
+            <ImageButton
                 android:id="@+id/settingsButton"
                 android:layout_width="40dp"
                 android:layout_height="40dp"
@@ -58,7 +80,7 @@
 
         </LinearLayout>
 
-        <!-- Address bar -->
+        <!-- Address bar + page actions -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -69,6 +91,17 @@
             android:paddingEnd="16dp"
             android:paddingTop="8dp"
             android:paddingBottom="8dp">
+
+            <ImageButton
+                android:id="@+id/starButton"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:layout_marginEnd="8dp"
+                android:background="@drawable/icon_button_bg"
+                android:contentDescription="@string/add_bookmark"
+                android:focusable="true"
+                android:padding="8dp"
+                android:src="@drawable/ic_star_outline" />
 
             <EditText
                 android:id="@+id/addressBar"
@@ -87,6 +120,39 @@
                 android:textColor="@color/text_primary"
                 android:textColorHint="@color/text_disabled"
                 android:textSize="@dimen/text_size_medium" />
+
+            <ImageButton
+                android:id="@+id/micButton"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:layout_marginStart="8dp"
+                android:background="@drawable/icon_button_bg"
+                android:contentDescription="@string/voice_search"
+                android:focusable="true"
+                android:padding="7dp"
+                android:src="@drawable/ic_mic" />
+
+            <ImageButton
+                android:id="@+id/zoomOutButton"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:layout_marginStart="8dp"
+                android:background="@drawable/icon_button_bg"
+                android:contentDescription="@string/zoom_out"
+                android:focusable="true"
+                android:padding="7dp"
+                android:src="@drawable/ic_zoom_out" />
+
+            <ImageButton
+                android:id="@+id/zoomInButton"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:layout_marginStart="8dp"
+                android:background="@drawable/icon_button_bg"
+                android:contentDescription="@string/zoom_in"
+                android:focusable="true"
+                android:padding="7dp"
+                android:src="@drawable/ic_zoom_in" />
 
         </LinearLayout>
 

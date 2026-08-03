@@ -19,8 +19,11 @@ class RemoteController(private val callback: Callback) {
         /** D-pad BACK was pressed. Return true if it was consumed. */
         fun onRemoteBackPressed(): Boolean
 
-        /** D-pad center / OK / Enter was pressed. Return true if consumed. */
-        fun onRemoteSelectPressed(focusedView: View?): Boolean
+        /** D-pad center / OK / Enter was pressed. [repeatCount] is 0 for the initial
+         *  press and increases while held — callers use this to distinguish a quick
+         *  tap (click) from a long press (e.g. open link in new tab). Return true if
+         *  consumed. */
+        fun onRemoteSelectPressed(focusedView: View?, repeatCount: Int): Boolean
 
         /** D-pad directional press (UP/DOWN/LEFT/RIGHT). [repeatCount] is 0 for the
          *  initial press and increases while the key is held down (auto-repeat) —
@@ -44,7 +47,7 @@ class RemoteController(private val callback: Callback) {
 
             KeyEvent.KEYCODE_DPAD_CENTER,
             KeyEvent.KEYCODE_ENTER,
-            KeyEvent.KEYCODE_NUMPAD_ENTER -> callback.onRemoteSelectPressed(focusedView)
+            KeyEvent.KEYCODE_NUMPAD_ENTER -> callback.onRemoteSelectPressed(focusedView, event.repeatCount)
 
             KeyEvent.KEYCODE_DPAD_UP,
             KeyEvent.KEYCODE_DPAD_DOWN,

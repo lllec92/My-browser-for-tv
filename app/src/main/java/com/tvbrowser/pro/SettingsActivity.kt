@@ -2,17 +2,16 @@ package com.tvbrowser.pro
 
 import android.content.Context
 import android.os.Bundle
-import android.view.View
+import android.view.KeyEvent
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.Switch
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 
 class SettingsActivity : AppCompatActivity() {
 
     private lateinit var prefs: android.content.SharedPreferences
-    private lateinit var switchAdblock: Switch
-    private lateinit var switchHeuristic: Switch
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -23,58 +22,65 @@ class SettingsActivity : AppCompatActivity() {
             Context.MODE_PRIVATE
         )
 
-        switchAdblock = findViewById(R.id.switchAdblock)
-        switchHeuristic = findViewById(R.id.switchHeuristic)
+        val switchAdblock = findViewById<Switch>(R.id.switchAdblock)
+        val switchHeuristic = findViewById<Switch>(R.id.switchHeuristic)
+        val switchDesktopMode = findViewById<Switch>(R.id.switchDesktopMode)
 
         switchAdblock.isChecked = VideoInterceptor.isAdBlockEnabled(prefs)
         switchHeuristic.isChecked = VideoInterceptor.isHeuristicEnabled(prefs)
+        switchDesktopMode.isChecked = VideoInterceptor.isDesktopModeEnabled(prefs)
 
-        val rowAdblock = findViewById<LinearLayout>(R.id.rowAdblock)
-        val rowHeuristic = findViewById<LinearLayout>(R.id.rowHeuristic)
-        val rowClearTabs = findViewById<LinearLayout>(R.id.rowClearTabs)
-        val backButton = findViewById<Button>(R.id.backButton)
+        bindToggleRow(R.id.rowAdblock, switchAdblock, VideoInterceptor.AdBlockSettings.KEY_ADBLOCK_ENABLED)
+        bindToggleRow(R.id.rowHeuristic, switchHeuristic, VideoInterceptor.AdBlockSettings.KEY_HEURISTIC_ENABLED)
+        bindToggleRow(R.id.rowDesktopMode, switchDesktopMode, VideoInterceptor.AdBlockSettings.KEY_DESKTOP_MODE_ENABLED)
 
-        rowAdblock.setOnClickListener { toggleAdblock() }
-        rowHeuristic.setOnClickListener { toggleHeuristic() }
-        rowClearTabs.setOnClickListener { clearSavedTabs() }
-        backButton.setOnClickListener { finish() }
-
-        rowAdblock.setOnKeyListener { _, keyCode, event ->
-            if (isSelectKey(keyCode) && event.action == android.view.KeyEvent.ACTION_DOWN) {
-                toggleAdblock(); true
-            } else false
+        bindActionRow(R.id.rowClearTabs) {
+            getSharedPreferences("tv_browser_tabs", Context.MODE_PRIVATE).edit().clear().apply()
+            Toast.makeText(this, R.string.settings_clear_tabs_title, Toast.LENGTH_SHORT).show()
         }
-        rowHeuristic.setOnKeyListener { _, keyCode, event ->
-            if (isSelectKey(keyCode) && event.action == android.view.KeyEvent.ACTION_DOWN) {
-                toggleHeuristic(); true
-            } else false
+        bindActionRow(R.id.rowClearHistory) {
+            HistoryManager(this).clearAll()
+            Toast.makeText(this, R.string.settings_clear_history_title, Toast.LENGTH_SHORT).show()
         }
-        rowClearTabs.setOnKeyListener { _, keyCode, event ->
-            if (isSelectKey(keyCode) && event.action == android.view.KeyEvent.ACTION_DOWN) {
-                clearSavedTabs(); true
-            } else false
+        bindActionRow(R.id.rowClearBookmarks) {
+            BookmarksManager(this).clearAll()
+            Toast.makeText(this, R.string.settings_clear_bookmarks_title, Toast.LENGTH_SHORT).show()
         }
 
-        rowAdblock.requestFocus()
+        findViewById<Button>(R.id.backButton).setOnClickListener { finish() }
+
+        findViewById<LinearLayout>(R.id.rowAdblock).requestFocus()
     }
 
-    private fun isSelectKey(keyCode: Int): Boolean = keyCode == android.view.KeyEvent.KEYCODE_DPAD_CENTER ||
-        keyCode == android.view.KeyEvent.KEYCODE_ENTER ||
-        keyCode == android.view.KeyEvent.KEYCODE_NUMPAD_ENTER
+    private fun isSelectKey(keyCode: Int): Boolean = keyCode == KeyEvent.KEYCODE_DPAD_CENTER ||
+        keyCode == KeyEvent.KEYCODE_ENTER ||
+        keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER
 
-    private fun toggleAdblock() {
-        val newValue = !switchAdblock.isChecked
-        switchAdblock.isChecked = newValue
-        prefs.edit().putBoolean(VideoInterceptor.AdBlockSettings.KEY_ADBLOCK_ENABLED, newValue).apply()
+    /** Wires a row so clicking it (or pressing OK while it's focused) flips [switchView]
+     *  and persists the new value under [prefKey]. */
+    private fun bindToggleRow(rowId: Int, switchView: Switch, prefKey: String) {
+        val row = findViewById<LinearLayout>(rowId)
+        val toggle = {
+            val newValue = !switchView.isChecked
+            switchView.isChecked = newValue
+            prefs.edit().putBoolean(prefKey, newValue).apply()
+        }
+        row.setOnClickListener { toggle() }
+        row.setOnKeyListener { _, keyCode, event ->
+            if (isSelectKey(keyCode) && event.action == KeyEvent.ACTION_DOWN) {
+                toggle(); true
+            } else false
+        }
     }
 
-    private fun toggleHeuristic() {
-        val newValue = !switchHeuristic.isChecked
-        switchHeuristic.isChecked = newValue
-        prefs.edit().putBoolean(VideoInterceptor.AdBlockSettings.KEY_HEURISTIC_ENABLED, newValue).apply()
-    }
-
-    private fun clearSavedTabs() {
-        getSharedPreferences("tv_browser_tabs", Context.MODE_PRIVATE).edit().clear().apply()
+    /** Wires a row so clicking it (or pressing OK while it's focused) runs [action]. */
+    private fun bindActionRow(rowId: Int, action: () -> Unit) {
+        val row = findViewById<LinearLayout>(rowId)
+        row.setOnClickListener { action() }
+        row.setOnKeyListener { _, keyCode, event ->
+            if (isSelectKey(keyCode) && event.action == KeyEvent.ACTION_DOWN) {
+                action(); true
+            } else false
+        }
     }
 }

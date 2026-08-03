@@ -23,7 +23,18 @@ object VideoInterceptor {
         const val PREFS_NAME = "tv_browser_settings"
         const val KEY_ADBLOCK_ENABLED = "adblock_enabled"
         const val KEY_HEURISTIC_ENABLED = "primary_video_heuristic_enabled"
+        const val KEY_DESKTOP_MODE_ENABLED = "desktop_mode_enabled"
     }
+
+    /** A modern desktop Chrome (Windows) User-Agent string, used when "Desktop mode" is
+     *  enabled so sites that behave differently on TV/mobile clients render their full
+     *  desktop layout instead of a stripped-down mobile one. */
+    const val DESKTOP_USER_AGENT =
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) " +
+            "Chrome/126.0.0.0 Safari/537.36"
+
+    fun isDesktopModeEnabled(prefs: android.content.SharedPreferences): Boolean =
+        prefs.getBoolean(AdBlockSettings.KEY_DESKTOP_MODE_ENABLED, true)
 
     // A compact, well-known list of ad/tracking domains. Not exhaustive, but covers the
     // large majority of preroll/midroll/display ad networks encountered on typical

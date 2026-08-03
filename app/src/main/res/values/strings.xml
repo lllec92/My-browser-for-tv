@@ -22,6 +22,35 @@
     <string name="settings_clear_tabs_summary">Удалить список открытых вкладок, сохранённый между запусками</string>
     <string name="settings_back">Назад</string>
 
+    <string name="bookmarks_title">Закладки</string>
+    <string name="bookmarks_empty">Пока нет закладок. Откройте страницу и нажмите на звёздочку, чтобы добавить.</string>
+    <string name="add_bookmark">Добавить в закладки</string>
+    <string name="remove_bookmark">Убрать из закладок</string>
+    <string name="open_bookmarks">Закладки</string>
+
+    <string name="history_title">История</string>
+    <string name="history_empty">История пуста</string>
+    <string name="history_clear">Очистить</string>
+    <string name="open_history">История</string>
+
+    <string name="zoom_in">Увеличить страницу</string>
+    <string name="zoom_out">Уменьшить страницу</string>
+
+    <string name="voice_search">Голосовой поиск</string>
+    <string name="voice_search_prompt">Произнесите адрес или запрос</string>
+    <string name="voice_search_unavailable">Голосовой ввод недоступен на этом устройстве</string>
+
+    <string name="settings_desktop_mode_title">Версия для компьютера (Desktop)</string>
+    <string name="settings_desktop_mode_summary">Показывать сайты как в браузере на ПК вместо мобильной версии</string>
+    <string name="settings_clear_history_title">Очистить историю посещений</string>
+    <string name="settings_clear_history_summary">Удалить весь список посещённых страниц</string>
+    <string name="settings_clear_bookmarks_title">Удалить все закладки</string>
+    <string name="settings_clear_bookmarks_summary">Список закладок будет очищен</string>
+
+    <string name="download_started">Загрузка начата: %1$s</string>
+    <string name="open_link_in_new_tab">Открыть ссылку в новой вкладке</string>
+    <string name="link_opened_new_tab">Ссылка открыта в новой вкладке</string>
+
     <string name="player_error_generic">Ошибка воспроизведения видео</string>
     <string name="player_error_decoder">Не удалось использовать аппаратный декодер, включён программный режим</string>
     <string name="webview_error_generic">Не удалось загрузить страницу</string>
