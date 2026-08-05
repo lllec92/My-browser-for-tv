@@ -174,8 +174,9 @@
                 android:layout_width="@dimen/cursor_size"
                 android:layout_height="@dimen/cursor_size"
                 android:src="@drawable/ic_cursor"
+                android:alpha="0.8"
                 android:elevation="20dp"
-                android:visibility="gone"
+                android:visibility="visible"
                 android:contentDescription="@null" />
 
         </FrameLayout>

@@ -13,7 +13,6 @@ import android.view.KeyEvent
 import android.view.LayoutInflater
 import android.view.View
 import android.view.inputmethod.EditorInfo
-import android.webkit.WebView
 import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.ImageButton
@@ -63,6 +62,7 @@ class MainActivity : AppCompatActivity(), BrowserView.Listener, RemoteController
     private lateinit var cursorController: CursorController
 
     private var longPressTriggered = false
+    private var chromeHasFocus = false
 
     private lateinit var bookmarksLauncher: ActivityResultLauncher<Intent>
     private lateinit var historyLauncher: ActivityResultLauncher<Intent>
@@ -103,16 +103,12 @@ class MainActivity : AppCompatActivity(), BrowserView.Listener, RemoteController
 
         registerActivityResultLaunchers()
 
-        // Show the cursor whenever a WebView holds Android focus, hide it everywhere
-        // else (tab bar, address bar, settings, mini player) so it never overlaps
-        // controls it isn't relevant to.
-        window.decorView.viewTreeObserver.addOnGlobalFocusChangeListener { _, newFocus ->
-            if (newFocus is WebView) {
-                cursorController.show()
-            } else {
-                cursorController.hide()
-            }
-        }
+        // The cursor is visible by default and moves with the D-pad whenever focus
+        // isn't on one of the "chrome" widgets below (tab bar, address bar, top
+        // buttons, mini player) — tracked explicitly via focus listeners rather than
+        // by checking whether the WebView itself holds Android focus, since a
+        // WebView's requestFocus() can silently fail right after it's made visible.
+        cursorController.show()
 
         tabManager = TabManager(this, webviewContainer, browserPrefs, this)
         tabManager.restoreOrCreateInitialTabs()
@@ -147,6 +143,22 @@ class MainActivity : AppCompatActivity(), BrowserView.Listener, RemoteController
                 expandMiniPlayer()
                 true
             } else false
+        }
+
+        trackChromeFocus(
+            newTabButton, bookmarksButton, historyButton, settingsButton,
+            starButton, addressBar, micButton, zoomOutButton, zoomInButton,
+            miniPlayerContainer
+        )
+    }
+
+    /** Marks each given view as "chrome" — while any of them holds focus, D-pad
+     *  presses go to normal Android focus-navigation/clicks instead of the cursor. */
+    private fun trackChromeFocus(vararg views: View) {
+        views.forEach { view ->
+            view.onFocusChangeListener = View.OnFocusChangeListener { _, hasFocus ->
+                chromeHasFocus = hasFocus
+            }
         }
     }
 
@@ -217,6 +229,8 @@ class MainActivity : AppCompatActivity(), BrowserView.Listener, RemoteController
                     true
                 } else false
             }
+
+            trackChromeFocus(card, closeButton)
 
             tabBarContainer.addView(card)
         }
@@ -468,10 +482,9 @@ class MainActivity : AppCompatActivity(), BrowserView.Listener, RemoteController
     }
 
     override fun onRemoteSelectPressed(focusedView: View?, repeatCount: Int): Boolean {
-        val activeBrowser = tabManager.activeTab()?.browserView
-        if (activeBrowser == null || focusedView !== activeBrowser.webView) {
-            return false
-        }
+        if (chromeHasFocus) return false
+        val activeBrowser = tabManager.activeTab()?.browserView ?: return false
+        val webView = activeBrowser.webView
 
         if (repeatCount == 0) {
             // Quick tap: hint the primary-video heuristic that the user deliberately
@@ -481,12 +494,12 @@ class MainActivity : AppCompatActivity(), BrowserView.Listener, RemoteController
             // just elements that happen to support HTML keyboard focus.
             longPressTriggered = false
             activeBrowser.notifyUserTappedVideoArea()
-            cursorController.dispatchTap(activeBrowser.webView)
+            cursorController.dispatchTap(webView)
         } else if (repeatCount == LONG_PRESS_REPEAT_THRESHOLD && !longPressTriggered) {
             // Held long enough: check what's under the cursor and, if it's a link,
             // open it in a new tab instead of just clicking it.
             longPressTriggered = true
-            cursorController.checkLinkUnderCursor(activeBrowser.webView) { link ->
+            cursorController.checkLinkUnderCursor(webView) { link ->
                 if (!link.isNullOrBlank()) {
                     openUrlInNewTab(link)
                     Toast.makeText(this, R.string.link_opened_new_tab, Toast.LENGTH_SHORT).show()
@@ -497,16 +510,17 @@ class MainActivity : AppCompatActivity(), BrowserView.Listener, RemoteController
     }
 
     override fun onRemoteDirectionPressed(keyCode: Int, repeatCount: Int, focusedView: View?): Boolean {
-        if (focusedView is WebView) {
-            // A quick press moves the cursor; holding the direction scrolls the page
-            // via a synthetic swipe. If the cursor is already pinned at an edge on a
-            // quick press, this returns false so normal Android focus-navigation can
-            // take over (e.g. moving up out of the page to the address bar/tab bar).
-            return cursorController.handleDirectionKey(keyCode, repeatCount, focusedView)
+        if (chromeHasFocus) {
+            // Defer to normal Android focus-navigation between tab bar / address bar /
+            // top buttons / mini player.
+            return false
         }
-        // Outside the WebView, defer to normal Android focus-navigation between
-        // tab bar / address bar / webview / mini player.
-        return false
+        // A quick press moves the cursor; holding the direction scrolls the page via
+        // a synthetic swipe. If the cursor is already pinned at an edge on a quick
+        // press, this returns false so normal Android focus-navigation can take over
+        // (e.g. moving up out of the page to the address bar/tab bar).
+        val webView = tabManager.activeTab()?.browserView?.webView
+        return cursorController.handleDirectionKey(keyCode, repeatCount, webView)
     }
 
     override fun onRemotePlayPausePressed(): Boolean {

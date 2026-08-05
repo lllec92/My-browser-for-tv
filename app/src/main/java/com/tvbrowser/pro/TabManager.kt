@@ -76,7 +76,10 @@ class TabManager(
         val target = tabs.find { it.id == tabId } ?: return
         tabs.forEach { it.browserView.visibility = android.view.View.GONE }
         target.browserView.visibility = android.view.View.VISIBLE
-        target.browserView.webView.requestFocus()
+        // requestFocus() right after flipping GONE -> VISIBLE can silently fail
+        // because the view hasn't been through a layout pass yet; posting it
+        // ensures that's happened first.
+        target.browserView.post { target.browserView.webView.requestFocus() }
         activeTabId = tabId
     }
 
