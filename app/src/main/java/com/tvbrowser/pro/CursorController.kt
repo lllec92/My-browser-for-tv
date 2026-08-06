@@ -1,5 +1,6 @@
 package com.tvbrowser.pro
 
+import android.graphics.Point
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
@@ -11,25 +12,29 @@ import android.widget.FrameLayout
 import android.widget.ImageView
 
 /**
- * Drives an on-screen cursor that the person moves with the D-pad while a WebView has focus,
- * and turns cursor actions into real synthetic touch events dispatched straight into the
- * WebView. This is what makes every element on a page — links, buttons, custom video-player
- * controls, sliders — reachable and clickable exactly as with a mouse or finger, rather than
- * only the subset of elements that happen to support HTML/DOM keyboard focus.
+ * Drives an on-screen cursor that covers the ENTIRE screen (tab bar, address bar, page
+ * content, mini player — everything), moved by the D-pad, and turns cursor actions into
+ * real synthetic touch events dispatched into the active WebView.
  *
  * Behaviour:
- * - A quick D-pad press (repeatCount == 0) moves the cursor a small, precise step.
- * - Holding a direction (key auto-repeat, repeatCount > 0) instead performs a synthetic
- *   swipe gesture, scrolling the page the same way a real finger-swipe would.
- * - OK/Select dispatches a synthetic tap (ACTION_DOWN + ACTION_UP) at the cursor's position.
- * - If the cursor is already pinned against an edge of the container and can't move any
- *   further in the pressed direction, the key press is reported as NOT consumed, so normal
- *   Android focus-navigation takes over — this is how the person "escapes" cursor mode to
- *   reach the tab bar, address bar, or mini player above/around the page area.
+ * - Every D-pad press moves the cursor a small, precise step, including while the key is
+ *   held (auto-repeat) — holding a direction keeps moving the cursor smoothly.
+ * - Scrolling is edge-triggered, not hold-triggered: once the cursor is pinned against the
+ *   very top or bottom of the *screen* (it can't move any further that way), further presses
+ *   in that direction scroll the page via a synthetic swipe instead.
+ * - OK/Select dispatches a synthetic tap at the cursor's position, translated into the
+ *   WebView's own local coordinate space (the WebView normally sits below the tab bar and
+ *   address bar, so its origin is offset from the screen's).
+ *
+ * [container] is the full-screen root overlay the cursor moves within and is drawn in.
+ * [contentView] is the WebView-bearing area (used only to translate cursor position into
+ * WebView-local coordinates for touch dispatch — the cursor's own movement is not confined
+ * to it).
  */
 class CursorController(
     private val container: FrameLayout,
-    private val cursorView: ImageView
+    private val cursorView: ImageView,
+    private val contentView: View
 ) {
     companion object {
         private const val STEP_DP = 26f
@@ -67,7 +72,6 @@ class CursorController(
         val width = container.width
         val height = container.height
         if (width == 0 || height == 0) {
-            // Layout not measured yet; try again once it is.
             container.post { ensureInitialPosition() }
             return
         }
@@ -88,13 +92,50 @@ class CursorController(
         cursorView.y = y
     }
 
-    /** Cursor's hotspot (its visual center) in [container]'s local coordinate space —
-     *  this lines up exactly with the active WebView's own coordinate space, since the
-     *  WebView fills [container] edge-to-edge with no offset. */
+    /** Cursor's hotspot (its visual center), in [container]'s (the whole screen's) local
+     *  coordinate space. */
     private fun hotspotX(): Float = x + cursorView.width / 2f
     private fun hotspotY(): Float = y + cursorView.height / 2f
 
-    /** Returns true if the cursor actually moved (i.e. it wasn't already pinned at an edge). */
+    /** The cursor's absolute on-screen position — used for hit-testing against other
+     *  views (e.g. the mini player, tab bar buttons) via View.getGlobalVisibleRect. */
+    fun screenPosition(): Point {
+        val loc = IntArray(2)
+        container.getLocationOnScreen(loc)
+        return Point((loc[0] + hotspotX()).toInt(), (loc[1] + hotspotY()).toInt())
+    }
+
+    /** Translates the cursor's position from screen-wide coordinates into [contentView]'s
+     *  (the WebView area's) own local coordinate space, clamped to its bounds — this is
+     *  what touch events dispatched into the WebView need. */
+    private fun contentLocalX(): Float {
+        val offsetX = contentOffsetX()
+        return (hotspotX() - offsetX).coerceIn(0f, contentView.width.toFloat())
+    }
+
+    private fun contentLocalY(): Float {
+        val offsetY = contentOffsetY()
+        return (hotspotY() - offsetY).coerceIn(0f, contentView.height.toFloat())
+    }
+
+    private fun contentOffsetX(): Float {
+        val containerLoc = IntArray(2)
+        val contentLoc = IntArray(2)
+        container.getLocationOnScreen(containerLoc)
+        contentView.getLocationOnScreen(contentLoc)
+        return (contentLoc[0] - containerLoc[0]).toFloat()
+    }
+
+    private fun contentOffsetY(): Float {
+        val containerLoc = IntArray(2)
+        val contentLoc = IntArray(2)
+        container.getLocationOnScreen(containerLoc)
+        contentView.getLocationOnScreen(contentLoc)
+        return (contentLoc[1] - containerLoc[1]).toFloat()
+    }
+
+    /** Returns true if the cursor actually moved (i.e. it wasn't already pinned at the
+     *  edge of the screen). */
     private fun moveBy(dx: Float, dy: Float): Boolean {
         ensureInitialPosition()
         val oldX = x
@@ -106,27 +147,27 @@ class CursorController(
     }
 
     /**
-     * Handles a D-pad directional key while a WebView has focus.
-     * Returns false (not consumed) when the cursor is pinned at an edge on a quick
-     * press, so the caller's normal focus-navigation fallback can move focus to a
-     * neighbouring widget (tab bar, address bar, mini player, etc).
+     * Handles a D-pad directional key. Always tries to move the cursor first — this is
+     * what makes holding a direction move the cursor smoothly rather than immediately
+     * scrolling. Only once the cursor is pinned against the corresponding edge of the
+     * *screen* (top/bottom/left/right) does the same key press instead scroll the page,
+     * via a synthetic swipe dispatched into [webView].
      */
-    fun handleDirectionKey(keyCode: Int, repeatCount: Int, webView: WebView?): Boolean {
+    fun handleDirectionKey(keyCode: Int, webView: WebView?): Boolean {
         ensureInitialPosition()
 
-        if (repeatCount == 0) {
-            val moved = when (keyCode) {
-                KeyEvent.KEYCODE_DPAD_UP -> moveBy(0f, -stepPx)
-                KeyEvent.KEYCODE_DPAD_DOWN -> moveBy(0f, stepPx)
-                KeyEvent.KEYCODE_DPAD_LEFT -> moveBy(-stepPx, 0f)
-                KeyEvent.KEYCODE_DPAD_RIGHT -> moveBy(stepPx, 0f)
-                else -> false
-            }
-            return moved
+        val moved = when (keyCode) {
+            KeyEvent.KEYCODE_DPAD_UP -> moveBy(0f, -stepPx)
+            KeyEvent.KEYCODE_DPAD_DOWN -> moveBy(0f, stepPx)
+            KeyEvent.KEYCODE_DPAD_LEFT -> moveBy(-stepPx, 0f)
+            KeyEvent.KEYCODE_DPAD_RIGHT -> moveBy(stepPx, 0f)
+            else -> return false
         }
 
-        // Direction is being held: scroll the page via a synthetic swipe instead of
-        // continuing to nudge the cursor pixel by pixel.
+        if (moved) return true
+
+        // Pinned at the screen edge: scroll instead, throttled so repeated key-repeat
+        // events (which fire every ~50-100ms while held) don't overlap swipe gestures.
         if (webView != null) {
             val now = SystemClock.uptimeMillis()
             if (now - lastSwipeDispatchTime >= SWIPE_THROTTLE_MS) {
@@ -140,8 +181,8 @@ class CursorController(
     /** Dispatches a synthetic tap (as a real finger/mouse click would be) at the
      *  cursor's current position into [webView]. */
     fun dispatchTap(webView: WebView) {
-        val tapX = hotspotX()
-        val tapY = hotspotY()
+        val tapX = contentLocalX()
+        val tapY = contentLocalY()
         val downTime = SystemClock.uptimeMillis()
 
         val down = MotionEvent.obtain(downTime, downTime, MotionEvent.ACTION_DOWN, tapX, tapY, 0)
@@ -164,8 +205,8 @@ class CursorController(
      * if the cursor was over a link/image-link, or null otherwise.
      */
     fun checkLinkUnderCursor(webView: WebView, onResult: (String?) -> Unit) {
-        val x = hotspotX()
-        val y = hotspotY()
+        val x = contentLocalX()
+        val y = contentLocalY()
         val downTime = SystemClock.uptimeMillis()
 
         val down = MotionEvent.obtain(downTime, downTime, MotionEvent.ACTION_DOWN, x, y, 0)
@@ -188,22 +229,37 @@ class CursorController(
     }
 
     /**
-     * Dispatches a synthetic finger-swipe gesture centred on the cursor, in the direction
-     * implied by [keyCode]. DPAD_DOWN means "show me what's below", i.e. the page content
-     * scrolls upward on screen — which corresponds to the finger swiping from low to high
-     * on the screen (and vice-versa), same as a real touchscreen scroll gesture.
+     * Dispatches a synthetic finger-swipe gesture centred on the cursor's translated
+     * position within [webView], in the direction implied by [keyCode]. DPAD_DOWN means
+     * "show me what's below", i.e. the page content scrolls upward on screen — which
+     * corresponds to the finger swiping from low to high on the screen (and vice-versa),
+     * same as a real touchscreen scroll gesture.
      */
     private fun dispatchSwipe(webView: WebView, keyCode: Int) {
-        val centerX = hotspotX()
-        val centerY = hotspotY()
+        val centerX = contentLocalX()
+        val centerY = contentLocalY()
         val half = swipeDistancePx / 2f
+        val maxY = contentView.height.toFloat()
+        val maxX = contentView.width.toFloat()
 
-        // (startX, startY, endX, endY)
+        // (startX, startY, endX, endY), clamped into the WebView's own bounds.
         val coords: List<Float> = when (keyCode) {
-            KeyEvent.KEYCODE_DPAD_DOWN -> listOf(centerX, centerY + half, centerX, centerY - half)
-            KeyEvent.KEYCODE_DPAD_UP -> listOf(centerX, centerY - half, centerX, centerY + half)
-            KeyEvent.KEYCODE_DPAD_RIGHT -> listOf(centerX + half, centerY, centerX - half, centerY)
-            KeyEvent.KEYCODE_DPAD_LEFT -> listOf(centerX - half, centerY, centerX + half, centerY)
+            KeyEvent.KEYCODE_DPAD_DOWN -> listOf(
+                centerX, (centerY + half).coerceIn(0f, maxY),
+                centerX, (centerY - half).coerceIn(0f, maxY)
+            )
+            KeyEvent.KEYCODE_DPAD_UP -> listOf(
+                centerX, (centerY - half).coerceIn(0f, maxY),
+                centerX, (centerY + half).coerceIn(0f, maxY)
+            )
+            KeyEvent.KEYCODE_DPAD_RIGHT -> listOf(
+                (centerX + half).coerceIn(0f, maxX), centerY,
+                (centerX - half).coerceIn(0f, maxX), centerY
+            )
+            KeyEvent.KEYCODE_DPAD_LEFT -> listOf(
+                (centerX - half).coerceIn(0f, maxX), centerY,
+                (centerX + half).coerceIn(0f, maxX), centerY
+            )
             else -> return
         }
         val startX = coords[0]

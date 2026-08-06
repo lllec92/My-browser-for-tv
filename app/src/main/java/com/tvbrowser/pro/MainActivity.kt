@@ -5,6 +5,7 @@ import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Rect
 import android.net.Uri
 import android.os.Bundle
 import android.speech.RecognizerIntent
@@ -13,6 +14,7 @@ import android.view.KeyEvent
 import android.view.LayoutInflater
 import android.view.View
 import android.view.inputmethod.EditorInfo
+import android.view.inputmethod.InputMethodManager
 import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.ImageButton
@@ -36,6 +38,7 @@ class MainActivity : AppCompatActivity(), BrowserView.Listener, RemoteController
         private const val LONG_PRESS_REPEAT_THRESHOLD = 3
     }
 
+    private lateinit var rootOverlay: FrameLayout
     private lateinit var tabBarContainer: LinearLayout
     private lateinit var newTabButton: ImageButton
     private lateinit var bookmarksButton: ImageButton
@@ -62,7 +65,6 @@ class MainActivity : AppCompatActivity(), BrowserView.Listener, RemoteController
     private lateinit var cursorController: CursorController
 
     private var longPressTriggered = false
-    private var chromeHasFocus = false
 
     private lateinit var bookmarksLauncher: ActivityResultLauncher<Intent>
     private lateinit var historyLauncher: ActivityResultLauncher<Intent>
@@ -73,6 +75,7 @@ class MainActivity : AppCompatActivity(), BrowserView.Listener, RemoteController
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
+        rootOverlay = findViewById(R.id.rootOverlay)
         tabBarContainer = findViewById(R.id.tabBarContainer)
         newTabButton = findViewById(R.id.newTabButton)
         bookmarksButton = findViewById(R.id.bookmarksButton)
@@ -99,21 +102,20 @@ class MainActivity : AppCompatActivity(), BrowserView.Listener, RemoteController
         historyManager = HistoryManager(this)
 
         remoteController = RemoteController(this)
-        cursorController = CursorController(webviewStack, tvCursor)
-
-        registerActivityResultLaunchers()
-
-        // The cursor is visible by default and moves with the D-pad whenever focus
-        // isn't on one of the "chrome" widgets below (tab bar, address bar, top
-        // buttons, mini player) — tracked explicitly via focus listeners rather than
-        // by checking whether the WebView itself holds Android focus, since a
-        // WebView's requestFocus() can silently fail right after it's made visible.
+        // The cursor's container is the WHOLE-SCREEN root overlay (not just the page
+        // area) so it renders above and can move over every part of the browser —
+        // tab bar, address bar, mini player, everything. webviewStack is passed
+        // separately purely so cursor positions can be translated into the
+        // WebView's own local coordinate space for touch dispatch.
+        cursorController = CursorController(rootOverlay, tvCursor, webviewStack)
         cursorController.show()
 
         tabManager = TabManager(this, webviewContainer, browserPrefs, this)
         tabManager.restoreOrCreateInitialTabs()
         renderTabBar()
         updateBookmarkIcon()
+
+        registerActivityResultLaunchers()
 
         newTabButton.setOnClickListener { onNewTabRequested() }
         bookmarksButton.setOnClickListener {
@@ -138,28 +140,6 @@ class MainActivity : AppCompatActivity(), BrowserView.Listener, RemoteController
         }
 
         miniPlayerContainer.setOnClickListener { expandMiniPlayer() }
-        miniPlayerContainer.setOnKeyListener { _, keyCode, event ->
-            if (event.action == KeyEvent.ACTION_DOWN && isSelectKey(keyCode)) {
-                expandMiniPlayer()
-                true
-            } else false
-        }
-
-        trackChromeFocus(
-            newTabButton, bookmarksButton, historyButton, settingsButton,
-            starButton, addressBar, micButton, zoomOutButton, zoomInButton,
-            miniPlayerContainer
-        )
-    }
-
-    /** Marks each given view as "chrome" — while any of them holds focus, D-pad
-     *  presses go to normal Android focus-navigation/clicks instead of the cursor. */
-    private fun trackChromeFocus(vararg views: View) {
-        views.forEach { view ->
-            view.onFocusChangeListener = View.OnFocusChangeListener { _, hasFocus ->
-                chromeHasFocus = hasFocus
-            }
-        }
     }
 
     override fun onResume() {
@@ -216,21 +196,7 @@ class MainActivity : AppCompatActivity(), BrowserView.Listener, RemoteController
             card.isSelected = tab.id == tabManager.activeTabId
 
             card.setOnClickListener { switchTab(tab.id) }
-            card.setOnKeyListener { _, keyCode, event ->
-                if (event.action == KeyEvent.ACTION_DOWN && isSelectKey(keyCode)) {
-                    switchTab(tab.id)
-                    true
-                } else false
-            }
             closeButton.setOnClickListener { closeTab(tab.id) }
-            closeButton.setOnKeyListener { _, keyCode, event ->
-                if (event.action == KeyEvent.ACTION_DOWN && isSelectKey(keyCode)) {
-                    closeTab(tab.id)
-                    true
-                } else false
-            }
-
-            trackChromeFocus(card, closeButton)
 
             tabBarContainer.addView(card)
         }
@@ -256,8 +222,6 @@ class MainActivity : AppCompatActivity(), BrowserView.Listener, RemoteController
         tabManager.openNewTab()
         renderTabBar()
         updateBookmarkIcon()
-        addressBar.requestFocus()
-        addressBar.selectAll()
     }
 
     /** Opens [url] in a brand-new tab and switches to it — used by bookmarks/history. */
@@ -273,7 +237,6 @@ class MainActivity : AppCompatActivity(), BrowserView.Listener, RemoteController
         if (raw.isEmpty()) return
         val target = resolveAddressBarInput(raw)
         tabManager.activeTab()?.browserView?.loadUrl(target)
-        tabManager.activeTab()?.browserView?.webView?.requestFocus()
     }
 
     /** Baseline browser behaviour: if the typed text doesn't look like a URL/domain,
@@ -287,10 +250,6 @@ class MainActivity : AppCompatActivity(), BrowserView.Listener, RemoteController
             "https://www.google.com/search?q=" + Uri.encode(input)
         }
     }
-
-    private fun isSelectKey(keyCode: Int): Boolean = keyCode == KeyEvent.KEYCODE_DPAD_CENTER ||
-        keyCode == KeyEvent.KEYCODE_ENTER ||
-        keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER
 
     // ---------------------------------------------------------------------
     // Bookmarks
@@ -386,10 +345,6 @@ class MainActivity : AppCompatActivity(), BrowserView.Listener, RemoteController
 
     override fun onDirectStreamRequested(tab: BrowserView, videoUrl: String) {
         if (tab.tabId != tabManager.activeTabId) return
-        // This request has already passed the ad-domain filter in shouldInterceptRequest,
-        // so a direct .mp4/.m3u8/.mpd hit here is very likely genuine content rather than
-        // an ad segment. Start it in ExoPlayer, but windowed rather than fullscreen —
-        // the person decides for themselves when (and whether) to go fullscreen.
         Log.d(TAG, "Direct stream requested: $videoUrl")
         startPlaybackWindowed(videoUrl)
     }
@@ -412,8 +367,8 @@ class MainActivity : AppCompatActivity(), BrowserView.Listener, RemoteController
 
     /**
      * Starts (or resumes) playback of [url] in the small windowed mini-player only.
-     * Fullscreen is never entered automatically — the person taps/selects the
-     * mini player themselves (see [expandMiniPlayer]) whenever they want it big.
+     * Fullscreen is never entered automatically — the person clicks the mini player
+     * themselves (see [expandMiniPlayer]) whenever they want it big.
      */
     private fun startPlaybackWindowed(url: String) {
         PlayerHolder.playUrl(this, url)
@@ -456,10 +411,62 @@ class MainActivity : AppCompatActivity(), BrowserView.Listener, RemoteController
     }
 
     // ---------------------------------------------------------------------
+    // Cursor-based hit-testing against the browser's own UI (tab bar, address
+    // bar, top buttons, mini player) — this is what lets OK-clicking the mini
+    // player with the cursor actually expand it to fullscreen, instead of the
+    // click silently being swallowed as a tap on the page underneath.
+    // ---------------------------------------------------------------------
+
+    private fun clickTargetsUnderCursor(): List<View> {
+        val targets = mutableListOf<View>(
+            newTabButton, bookmarksButton, historyButton, settingsButton,
+            starButton, addressBar, micButton, zoomOutButton, zoomInButton
+        )
+        if (miniPlayerContainer.visibility == View.VISIBLE) {
+            targets.add(0, miniPlayerContainer)
+        }
+        for (i in 0 until tabBarContainer.childCount) {
+            val card = tabBarContainer.getChildAt(i)
+            targets.add(card)
+            card.findViewById<View>(R.id.tabCloseButton)?.let { targets.add(it) }
+        }
+        return targets
+    }
+
+    /** Returns the topmost browser-UI view the cursor is currently over, or null if
+     *  it's over the page content instead. */
+    private fun viewUnderCursor(): View? {
+        val cursorPoint = cursorController.screenPosition()
+        val rect = Rect()
+        for (view in clickTargetsUnderCursor()) {
+            if (view.visibility != View.VISIBLE) continue
+            view.getGlobalVisibleRect(rect)
+            if (rect.contains(cursorPoint.x, cursorPoint.y)) return view
+        }
+        return null
+    }
+
+    private fun clickView(view: View) {
+        view.performClick()
+        if (view === addressBar) {
+            addressBar.requestFocus()
+            val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+            imm.showSoftInput(addressBar, InputMethodManager.SHOW_IMPLICIT)
+        }
+    }
+
+    // ---------------------------------------------------------------------
     // RemoteController.Callback
     // ---------------------------------------------------------------------
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        // A dialog, popup (e.g. a WebView <select> dropdown listing episodes), or the
+        // IME currently has input focus — or the address bar is being actively edited
+        // (so arrow keys should move the text caret, not the cursor). Let the system
+        // route the key event normally instead of hijacking it for cursor/scroll.
+        if (!window.decorView.hasWindowFocus() || currentFocus === addressBar) {
+            return super.dispatchKeyEvent(event)
+        }
         if (remoteController.handleKeyEvent(event, currentFocus)) {
             return true
         }
@@ -467,8 +474,7 @@ class MainActivity : AppCompatActivity(), BrowserView.Listener, RemoteController
     }
 
     override fun onRemoteBackPressed(): Boolean {
-        val focused = currentFocus
-        if (miniPlayerContainer.hasFocus() || focused === miniPlayerContainer) {
+        if (miniPlayerContainer.visibility == View.VISIBLE && viewUnderCursor() === miniPlayerContainer) {
             closeMiniPlayer()
             return true
         }
@@ -482,16 +488,24 @@ class MainActivity : AppCompatActivity(), BrowserView.Listener, RemoteController
     }
 
     override fun onRemoteSelectPressed(focusedView: View?, repeatCount: Int): Boolean {
-        if (chromeHasFocus) return false
+        val hitView = viewUnderCursor()
+        if (hitView != null) {
+            if (repeatCount == 0) {
+                clickView(hitView)
+            }
+            return true
+        }
+
         val activeBrowser = tabManager.activeTab()?.browserView ?: return false
         val webView = activeBrowser.webView
 
         if (repeatCount == 0) {
-            // Quick tap: hint the primary-video heuristic that the user deliberately
-            // interacted with the page, then dispatch a real synthetic tap at the
-            // cursor's position — this is what lets any element (link, button, custom
-            // video player control) be clicked exactly as with a mouse/finger, not
-            // just elements that happen to support HTML keyboard focus.
+            // Quick tap over the page: hint the primary-video heuristic that the user
+            // deliberately interacted with the page, then dispatch a real synthetic
+            // tap at the cursor's position — this is what lets any element (link,
+            // button, custom video player control) be clicked exactly as with a
+            // mouse/finger, not just elements that happen to support HTML keyboard
+            // focus.
             longPressTriggered = false
             activeBrowser.notifyUserTappedVideoArea()
             cursorController.dispatchTap(webView)
@@ -510,17 +524,11 @@ class MainActivity : AppCompatActivity(), BrowserView.Listener, RemoteController
     }
 
     override fun onRemoteDirectionPressed(keyCode: Int, repeatCount: Int, focusedView: View?): Boolean {
-        if (chromeHasFocus) {
-            // Defer to normal Android focus-navigation between tab bar / address bar /
-            // top buttons / mini player.
-            return false
-        }
-        // A quick press moves the cursor; holding the direction scrolls the page via
-        // a synthetic swipe. If the cursor is already pinned at an edge on a quick
-        // press, this returns false so normal Android focus-navigation can take over
-        // (e.g. moving up out of the page to the address bar/tab bar).
+        // The cursor always owns D-pad direction presses now: a press moves it, and
+        // only once it's pinned against the screen edge does the same press scroll
+        // the page instead (see CursorController.handleDirectionKey).
         val webView = tabManager.activeTab()?.browserView?.webView
-        return cursorController.handleDirectionKey(keyCode, repeatCount, webView)
+        return cursorController.handleDirectionKey(keyCode, webView)
     }
 
     override fun onRemotePlayPausePressed(): Boolean {

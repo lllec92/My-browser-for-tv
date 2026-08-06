@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/rootOverlay"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@color/bg_root">
@@ -156,7 +157,7 @@
 
         </LinearLayout>
 
-        <!-- WebView tab contents + remote-controlled cursor overlay -->
+        <!-- WebView tab contents -->
         <FrameLayout
             android:id="@+id/webviewStack"
             android:layout_width="match_parent"
@@ -168,16 +169,6 @@
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
                 android:background="@color/bg_surface" />
-
-            <ImageView
-                android:id="@+id/tvCursor"
-                android:layout_width="@dimen/cursor_size"
-                android:layout_height="@dimen/cursor_size"
-                android:src="@drawable/ic_cursor"
-                android:alpha="0.8"
-                android:elevation="20dp"
-                android:visibility="visible"
-                android:contentDescription="@null" />
 
         </FrameLayout>
 
@@ -227,5 +218,18 @@
             android:gravity="center" />
 
     </FrameLayout>
+
+    <!-- Cursor overlay: last child of the root so it always draws above the tab
+         bar, address bar, page content, AND the mini player. Movement range is
+         the whole screen (see CursorController), not just the page area. -->
+    <ImageView
+        android:id="@+id/tvCursor"
+        android:layout_width="@dimen/cursor_size"
+        android:layout_height="@dimen/cursor_size"
+        android:src="@drawable/ic_cursor"
+        android:alpha="0.8"
+        android:elevation="32dp"
+        android:visibility="visible"
+        android:contentDescription="@null" />
 
 </FrameLayout>
