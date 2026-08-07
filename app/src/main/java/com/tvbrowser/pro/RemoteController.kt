@@ -31,6 +31,11 @@ class RemoteController(private val callback: Callback) {
          *  while the direction is held. Return true if consumed. */
         fun onRemoteDirectionPressed(keyCode: Int, repeatCount: Int, focusedView: View?): Boolean
 
+        /** D-pad directional key was released (ACTION_UP) — used to stop continuous
+         *  cursor movement / page scrolling precisely when the person lets go,
+         *  instead of only reacting to auto-repeat while held. */
+        fun onRemoteDirectionReleased(keyCode: Int)
+
         /** Media play/pause remote button. Return true if consumed. */
         fun onRemotePlayPausePressed(): Boolean
     }
@@ -40,6 +45,19 @@ class RemoteController(private val callback: Callback) {
      * Returns true if the event was handled and should not propagate further.
      */
     fun handleKeyEvent(event: KeyEvent, focusedView: View?): Boolean {
+        if (event.action == KeyEvent.ACTION_UP) {
+            return when (event.keyCode) {
+                KeyEvent.KEYCODE_DPAD_UP,
+                KeyEvent.KEYCODE_DPAD_DOWN,
+                KeyEvent.KEYCODE_DPAD_LEFT,
+                KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                    callback.onRemoteDirectionReleased(event.keyCode)
+                    true
+                }
+                else -> false
+            }
+        }
+
         if (event.action != KeyEvent.ACTION_DOWN) return false
 
         return when (event.keyCode) {

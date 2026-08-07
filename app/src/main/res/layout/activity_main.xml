@@ -205,18 +205,6 @@
             app:use_controller="false"
             app:resize_mode="fit" />
 
-        <TextView
-            android:id="@+id/miniPlayerHint"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_gravity="bottom"
-            android:background="@color/overlay_scrim"
-            android:padding="6dp"
-            android:text="@string/mini_player_expand"
-            android:textColor="@color/text_primary"
-            android:textSize="@dimen/text_size_small"
-            android:gravity="center" />
-
     </FrameLayout>
 
     <!-- Cursor overlay: last child of the root so it always draws above the tab

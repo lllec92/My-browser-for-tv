@@ -55,7 +55,6 @@ class MainActivity : AppCompatActivity(), BrowserView.Listener, RemoteController
     private lateinit var loadingProgress: ProgressBar
     private lateinit var miniPlayerContainer: FrameLayout
     private lateinit var miniPlayerView: PlayerView
-    private lateinit var miniPlayerHint: TextView
 
     private lateinit var browserPrefs: android.content.SharedPreferences
     private lateinit var tabManager: TabManager
@@ -92,7 +91,6 @@ class MainActivity : AppCompatActivity(), BrowserView.Listener, RemoteController
         loadingProgress = findViewById(R.id.loadingProgress)
         miniPlayerContainer = findViewById(R.id.miniPlayerContainer)
         miniPlayerView = findViewById(R.id.miniPlayerView)
-        miniPlayerHint = findViewById(R.id.miniPlayerHint)
 
         browserPrefs = getSharedPreferences(
             VideoInterceptor.AdBlockSettings.PREFS_NAME,
@@ -145,6 +143,11 @@ class MainActivity : AppCompatActivity(), BrowserView.Listener, RemoteController
     override fun onResume() {
         super.onResume()
         refreshMiniPlayerVisibility()
+    }
+
+    override fun onPause() {
+        super.onPause()
+        cursorController.stopDirectionHold()
     }
 
     private fun registerActivityResultLaunchers() {
@@ -447,11 +450,14 @@ class MainActivity : AppCompatActivity(), BrowserView.Listener, RemoteController
     }
 
     private fun clickView(view: View) {
-        view.performClick()
-        if (view === addressBar) {
-            addressBar.requestFocus()
-            val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
-            imm.showSoftInput(addressBar, InputMethodManager.SHOW_IMPLICIT)
+        when (view) {
+            miniPlayerContainer -> expandMiniPlayer()
+            addressBar -> {
+                addressBar.requestFocus()
+                val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+                imm.showSoftInput(addressBar, InputMethodManager.SHOW_IMPLICIT)
+            }
+            else -> view.performClick()
         }
     }
 
@@ -474,6 +480,7 @@ class MainActivity : AppCompatActivity(), BrowserView.Listener, RemoteController
     }
 
     override fun onRemoteBackPressed(): Boolean {
+        cursorController.stopDirectionHold()
         if (miniPlayerContainer.visibility == View.VISIBLE && viewUnderCursor() === miniPlayerContainer) {
             closeMiniPlayer()
             return true
@@ -488,6 +495,7 @@ class MainActivity : AppCompatActivity(), BrowserView.Listener, RemoteController
     }
 
     override fun onRemoteSelectPressed(focusedView: View?, repeatCount: Int): Boolean {
+        cursorController.stopDirectionHold()
         val hitView = viewUnderCursor()
         if (hitView != null) {
             if (repeatCount == 0) {
@@ -524,11 +532,18 @@ class MainActivity : AppCompatActivity(), BrowserView.Listener, RemoteController
     }
 
     override fun onRemoteDirectionPressed(keyCode: Int, repeatCount: Int, focusedView: View?): Boolean {
-        // The cursor always owns D-pad direction presses now: a press moves it, and
-        // only once it's pinned against the screen edge does the same press scroll
-        // the page instead (see CursorController.handleDirectionKey).
+        // The cursor always owns D-pad direction presses now: a continuous ~60fps loop
+        // smoothly moves it every tick, and once it's pinned against the screen edge
+        // the same loop seamlessly drags/scrolls the page instead (see
+        // CursorController.startDirectionHold). It runs until onRemoteDirectionReleased
+        // fires on key-up.
         val webView = tabManager.activeTab()?.browserView?.webView
-        return cursorController.handleDirectionKey(keyCode, webView)
+        cursorController.startDirectionHold(keyCode, webView)
+        return true
+    }
+
+    override fun onRemoteDirectionReleased(keyCode: Int) {
+        cursorController.stopDirectionHold()
     }
 
     override fun onRemotePlayPausePressed(): Boolean {

@@ -17,11 +17,15 @@ import android.widget.ImageView
  * real synthetic touch events dispatched into the active WebView.
  *
  * Behaviour:
- * - Every D-pad press moves the cursor a small, precise step, including while the key is
- *   held (auto-repeat) — holding a direction keeps moving the cursor smoothly.
- * - Scrolling is edge-triggered, not hold-triggered: once the cursor is pinned against the
- *   very top or bottom of the *screen* (it can't move any further that way), further presses
- *   in that direction scroll the page via a synthetic swipe instead.
+ * - Holding a direction runs a single continuous ~60fps loop ([startDirectionHold] /
+ *   [stopDirectionHold], driven by real key-down/key-up, not just auto-repeat) that nudges
+ *   the cursor a few pixels every tick — this is what makes movement look and feel smooth
+ *   rather than jumping in big discrete steps.
+ * - The instant the cursor is pinned against an edge of the *screen* and can't move any
+ *   further that way, the same loop seamlessly switches to dragging the page instead: a
+ *   single continuous touch gesture (one ACTION_DOWN, many ACTION_MOVE ticks, one
+ *   ACTION_UP exactly when the key is released) — a real drag, not a series of separate
+ *   swipe bursts, so the scroll feels continuous and natural.
  * - OK/Select dispatches a synthetic tap at the cursor's position, translated into the
  *   WebView's own local coordinate space (the WebView normally sits below the tab bar and
  *   address bar, so its origin is offset from the screen's).
@@ -37,24 +41,32 @@ class CursorController(
     private val contentView: View
 ) {
     companion object {
-        private const val STEP_DP = 26f
-        private const val SWIPE_DISTANCE_DP = 260f
-        private const val SWIPE_STEPS = 8
-        private const val SWIPE_STEP_DELAY_MS = 12L
-        private const val SWIPE_THROTTLE_MS = 220L
+        // Per-tick movement, run at ~60fps — small enough to look smooth, fast enough
+        // to feel responsive (roughly 550dp/sec of on-screen travel).
+        private const val CURSOR_TICK_DP = 9f
+        private const val SCROLL_TICK_DP = 11f
+        private const val TICK_INTERVAL_MS = 16L
         private const val TAP_UP_DELAY_MS = 60L
         private const val LONG_PRESS_CHECK_DELAY_MS = 90L
     }
 
     private val density = container.resources.displayMetrics.density
-    private val stepPx = STEP_DP * density
-    private val swipeDistancePx = SWIPE_DISTANCE_DP * density
+    private val cursorTickPx = CURSOR_TICK_DP * density
+    private val scrollTickPx = SCROLL_TICK_DP * density
 
     private var x = 0f
     private var y = 0f
     private var initialized = false
-    private var lastSwipeDispatchTime = 0L
     private val handler = Handler(Looper.getMainLooper())
+
+    // --- Continuous hold-to-move/scroll state ---
+    private var holdRunnable: Runnable? = null
+    private var holdKeyCode: Int = 0
+    private var isScrolling = false
+    private var scrollWebView: WebView? = null
+    private var scrollDownTime: Long = 0L
+    private var scrollCurrentX: Float = 0f
+    private var scrollCurrentY: Float = 0f
 
     fun show() {
         ensureInitialPosition()
@@ -82,8 +94,8 @@ class CursorController(
     }
 
     private fun applyPosition() {
-        val cursorWidth = cursorView.width.takeIf { it > 0 } ?: (STEP_DP * density).toInt()
-        val cursorHeight = cursorView.height.takeIf { it > 0 } ?: (STEP_DP * density).toInt()
+        val cursorWidth = cursorView.width.takeIf { it > 0 } ?: (CURSOR_TICK_DP * density).toInt()
+        val cursorHeight = cursorView.height.takeIf { it > 0 } ?: (CURSOR_TICK_DP * density).toInt()
         val maxX = (container.width - cursorWidth).coerceAtLeast(0)
         val maxY = (container.height - cursorHeight).coerceAtLeast(0)
         x = x.coerceIn(0f, maxX.toFloat())
@@ -108,15 +120,8 @@ class CursorController(
     /** Translates the cursor's position from screen-wide coordinates into [contentView]'s
      *  (the WebView area's) own local coordinate space, clamped to its bounds — this is
      *  what touch events dispatched into the WebView need. */
-    private fun contentLocalX(): Float {
-        val offsetX = contentOffsetX()
-        return (hotspotX() - offsetX).coerceIn(0f, contentView.width.toFloat())
-    }
-
-    private fun contentLocalY(): Float {
-        val offsetY = contentOffsetY()
-        return (hotspotY() - offsetY).coerceIn(0f, contentView.height.toFloat())
-    }
+    private fun contentLocalX(): Float = (hotspotX() - contentOffsetX()).coerceIn(0f, contentView.width.toFloat())
+    private fun contentLocalY(): Float = (hotspotY() - contentOffsetY()).coerceIn(0f, contentView.height.toFloat())
 
     private fun contentOffsetX(): Float {
         val containerLoc = IntArray(2)
@@ -147,35 +152,87 @@ class CursorController(
     }
 
     /**
-     * Handles a D-pad directional key. Always tries to move the cursor first — this is
-     * what makes holding a direction move the cursor smoothly rather than immediately
-     * scrolling. Only once the cursor is pinned against the corresponding edge of the
-     * *screen* (top/bottom/left/right) does the same key press instead scroll the page,
-     * via a synthetic swipe dispatched into [webView].
+     * Starts (or continues) smoothly moving the cursor while [keyCode] is held. Safe to
+     * call repeatedly for the same key (e.g. once per auto-repeat KeyEvent) — it's a
+     * no-op if that direction's loop is already running. Call [stopDirectionHold] on
+     * ACTION_UP to stop it.
      */
-    fun handleDirectionKey(keyCode: Int, webView: WebView?): Boolean {
+    fun startDirectionHold(keyCode: Int, webView: WebView?) {
         ensureInitialPosition()
+        if (holdRunnable != null && holdKeyCode == keyCode) return
+        stopDirectionHold()
+        holdKeyCode = keyCode
+        isScrolling = false
 
-        val moved = when (keyCode) {
-            KeyEvent.KEYCODE_DPAD_UP -> moveBy(0f, -stepPx)
-            KeyEvent.KEYCODE_DPAD_DOWN -> moveBy(0f, stepPx)
-            KeyEvent.KEYCODE_DPAD_LEFT -> moveBy(-stepPx, 0f)
-            KeyEvent.KEYCODE_DPAD_RIGHT -> moveBy(stepPx, 0f)
-            else -> return false
-        }
-
-        if (moved) return true
-
-        // Pinned at the screen edge: scroll instead, throttled so repeated key-repeat
-        // events (which fire every ~50-100ms while held) don't overlap swipe gestures.
-        if (webView != null) {
-            val now = SystemClock.uptimeMillis()
-            if (now - lastSwipeDispatchTime >= SWIPE_THROTTLE_MS) {
-                lastSwipeDispatchTime = now
-                dispatchSwipe(webView, keyCode)
+        val runnable = object : Runnable {
+            override fun run() {
+                if (!isScrolling) {
+                    val moved = when (keyCode) {
+                        KeyEvent.KEYCODE_DPAD_UP -> moveBy(0f, -cursorTickPx)
+                        KeyEvent.KEYCODE_DPAD_DOWN -> moveBy(0f, cursorTickPx)
+                        KeyEvent.KEYCODE_DPAD_LEFT -> moveBy(-cursorTickPx, 0f)
+                        KeyEvent.KEYCODE_DPAD_RIGHT -> moveBy(cursorTickPx, 0f)
+                        else -> false
+                    }
+                    if (!moved && webView != null) {
+                        beginScrollDrag(webView)
+                    }
+                } else {
+                    continueScrollDrag(keyCode)
+                }
+                handler.postDelayed(this, TICK_INTERVAL_MS)
             }
         }
-        return true
+        holdRunnable = runnable
+        handler.post(runnable)
+    }
+
+    /** Stops any in-progress hold-to-move/scroll loop, cleanly ending a scroll drag
+     *  (dispatching ACTION_UP) if one was active. */
+    fun stopDirectionHold() {
+        holdRunnable?.let { handler.removeCallbacks(it) }
+        holdRunnable = null
+        if (isScrolling) {
+            scrollWebView?.let { webView ->
+                val upTime = SystemClock.uptimeMillis()
+                val up = MotionEvent.obtain(scrollDownTime, upTime, MotionEvent.ACTION_UP, scrollCurrentX, scrollCurrentY, 0)
+                webView.dispatchTouchEvent(up)
+                up.recycle()
+            }
+        }
+        isScrolling = false
+        scrollWebView = null
+    }
+
+    private fun beginScrollDrag(webView: WebView) {
+        isScrolling = true
+        scrollWebView = webView
+        scrollDownTime = SystemClock.uptimeMillis()
+        scrollCurrentX = contentLocalX()
+        scrollCurrentY = contentLocalY()
+        val down = MotionEvent.obtain(scrollDownTime, scrollDownTime, MotionEvent.ACTION_DOWN, scrollCurrentX, scrollCurrentY, 0)
+        webView.dispatchTouchEvent(down)
+        down.recycle()
+    }
+
+    /** DPAD_DOWN means "show me what's below", i.e. the page content scrolls upward on
+     *  screen — which corresponds to the finger dragging from low to high (and
+     *  vice-versa), same relationship a real touchscreen scroll relies on. */
+    private fun continueScrollDrag(keyCode: Int) {
+        val webView = scrollWebView ?: return
+        val (dx, dy) = when (keyCode) {
+            KeyEvent.KEYCODE_DPAD_DOWN -> 0f to -scrollTickPx
+            KeyEvent.KEYCODE_DPAD_UP -> 0f to scrollTickPx
+            KeyEvent.KEYCODE_DPAD_RIGHT -> -scrollTickPx to 0f
+            KeyEvent.KEYCODE_DPAD_LEFT -> scrollTickPx to 0f
+            else -> 0f to 0f
+        }
+        scrollCurrentX += dx
+        scrollCurrentY += dy
+        val moveTime = SystemClock.uptimeMillis()
+        val move = MotionEvent.obtain(scrollDownTime, moveTime, MotionEvent.ACTION_MOVE, scrollCurrentX, scrollCurrentY, 0)
+        webView.dispatchTouchEvent(move)
+        move.recycle()
     }
 
     /** Dispatches a synthetic tap (as a real finger/mouse click would be) at the
@@ -226,64 +283,5 @@ class CursorController(
             cancel.recycle()
             onResult(link)
         }, LONG_PRESS_CHECK_DELAY_MS)
-    }
-
-    /**
-     * Dispatches a synthetic finger-swipe gesture centred on the cursor's translated
-     * position within [webView], in the direction implied by [keyCode]. DPAD_DOWN means
-     * "show me what's below", i.e. the page content scrolls upward on screen — which
-     * corresponds to the finger swiping from low to high on the screen (and vice-versa),
-     * same as a real touchscreen scroll gesture.
-     */
-    private fun dispatchSwipe(webView: WebView, keyCode: Int) {
-        val centerX = contentLocalX()
-        val centerY = contentLocalY()
-        val half = swipeDistancePx / 2f
-        val maxY = contentView.height.toFloat()
-        val maxX = contentView.width.toFloat()
-
-        // (startX, startY, endX, endY), clamped into the WebView's own bounds.
-        val coords: List<Float> = when (keyCode) {
-            KeyEvent.KEYCODE_DPAD_DOWN -> listOf(
-                centerX, (centerY + half).coerceIn(0f, maxY),
-                centerX, (centerY - half).coerceIn(0f, maxY)
-            )
-            KeyEvent.KEYCODE_DPAD_UP -> listOf(
-                centerX, (centerY - half).coerceIn(0f, maxY),
-                centerX, (centerY + half).coerceIn(0f, maxY)
-            )
-            KeyEvent.KEYCODE_DPAD_RIGHT -> listOf(
-                (centerX + half).coerceIn(0f, maxX), centerY,
-                (centerX - half).coerceIn(0f, maxX), centerY
-            )
-            KeyEvent.KEYCODE_DPAD_LEFT -> listOf(
-                (centerX - half).coerceIn(0f, maxX), centerY,
-                (centerX + half).coerceIn(0f, maxX), centerY
-            )
-            else -> return
-        }
-        val startX = coords[0]
-        val startY = coords[1]
-        val endX = coords[2]
-        val endY = coords[3]
-
-        val downTime = SystemClock.uptimeMillis()
-        val down = MotionEvent.obtain(downTime, downTime, MotionEvent.ACTION_DOWN, startX, startY, 0)
-        webView.dispatchTouchEvent(down)
-        down.recycle()
-
-        for (i in 1..SWIPE_STEPS) {
-            val fraction = i.toFloat() / SWIPE_STEPS
-            val moveX = startX + (endX - startX) * fraction
-            val moveY = startY + (endY - startY) * fraction
-            val isLast = i == SWIPE_STEPS
-            handler.postDelayed({
-                val stepTime = SystemClock.uptimeMillis()
-                val action = if (isLast) MotionEvent.ACTION_UP else MotionEvent.ACTION_MOVE
-                val event = MotionEvent.obtain(downTime, stepTime, action, moveX, moveY, 0)
-                webView.dispatchTouchEvent(event)
-                event.recycle()
-            }, i * SWIPE_STEP_DELAY_MS)
-        }
     }
 }

@@ -96,6 +96,10 @@ class VideoPlayerActivity : AppCompatActivity(), RemoteController.Callback, Play
         return false
     }
 
+    override fun onRemoteDirectionReleased(keyCode: Int) {
+        // No-op: VideoPlayerActivity doesn't use the cursor/scroll system.
+    }
+
     override fun onRemotePlayPausePressed(): Boolean {
         val player = playerView.player ?: return false
         player.playWhenReady = !player.playWhenReady
